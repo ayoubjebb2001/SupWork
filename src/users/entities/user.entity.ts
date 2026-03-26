@@ -13,6 +13,9 @@ export class User {
   lastname: string;
 
   @Column()
+  email: string;
+
+  @Column()
   passwordHash: string;
 
   @Column()
@@ -28,8 +31,21 @@ export class User {
   status: UserStatus;
 
   @Column()
-  isAvailable: boolean;
+  isAvailable?: boolean;
 
   @Column()
   lastLoginAt?: Date;
+
+  @Column()
+  phoneNumber: string;
+
+  @Column()
+  department?: string;
+
+  @Column()
+  jobTitle?: string;
+
+  @Column()
+  companyName?: string;
+
 }
