@@ -41,13 +41,12 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @Get('client/:clientId')
-  @UseGuards(AuthGuard('jwt'))
+  @Roles(UserRole.Admin, UserRole.Client)
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
   findClientTickets(@Param('clientId') clientId: string, @Req() req: RequestWithUser) {
-    const isAdmin = req.user.role === UserRole.Admin;
-    const isOwner = req.user.sub === clientId;
 
-    if (!isAdmin && !isOwner) {
-      throw new ForbiddenException('Only the owner or an admin can access these tickets');
+    if (req.user.role == UserRole.Client && req.user.sub !== clientId) {
+      throw new ForbiddenException('You are not authorized to access this resource');
     }
 
     return this.ticketsService.findByClientId(clientId);
