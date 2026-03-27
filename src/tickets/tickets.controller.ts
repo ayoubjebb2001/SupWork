@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  ForbiddenException,
   Get,
   Param,
   Post,
@@ -10,13 +9,13 @@ import {
   UseInterceptors,
   UploadedFiles,
 } from '@nestjs/common';
-import { Roles } from 'src/common/decorators/roles.decorator';
-import { RolesGuard } from 'src/common/guards/roles.guard';
+import { Action } from 'src/casl/casl-ability.factory';
+import { CheckPolicies } from 'src/common/decorators/check-policies.decorator';
+import { PoliciesGuard } from 'src/common/guards/policies.guard';
 import type {
   AuthenticatedRequest,
   AuthenticatedUser,
 } from 'src/common/types/authenticated-request.type';
-import { UserRole } from 'src/enums/user.enums';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketsService } from './tickets.service';
 import { FilesInterceptor, diskStorage } from 'nestjs-busboy';
@@ -36,21 +35,15 @@ export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
 
   @Get('client/:clientId')
-  @Roles(UserRole.Admin, UserRole.Client)
-  @UseGuards(RolesGuard)
+  @CheckPolicies((ability) => ability.can(Action.Read, 'Ticket'))
+  @UseGuards(PoliciesGuard)
   findClientTickets(@Param('clientId') clientId: string, @Req() req: AuthenticatedRequest) {
-    const user = req.user as AuthenticatedUser;
-
-    if (user.role === UserRole.Client && user.sub !== clientId) {
-      throw new ForbiddenException('You are not authorized to access this resource');
-    }
-
-    return this.ticketsService.findByClientId(clientId);
+    return this.ticketsService.findByClientId(clientId, req.user as AuthenticatedUser);
   }
 
   @Post()
-  @Roles(UserRole.Client)
-  @UseGuards(RolesGuard)
+  @CheckPolicies((ability) => ability.can(Action.Create, 'Ticket'))
+  @UseGuards(PoliciesGuard)
   @UseInterceptors(
     FilesInterceptor('files', 5, {
       storage: diskStorage({

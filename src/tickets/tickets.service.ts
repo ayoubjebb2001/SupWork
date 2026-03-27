@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { CaslAbilityFactory, Action } from 'src/casl/casl-ability.factory';
 import { AuthenticatedUser } from 'src/common/types/authenticated-request.type';
 import { MongoRepository } from 'typeorm';
 import { CreateTicketDto } from './dto/create-ticket.dto';
@@ -23,6 +24,7 @@ export class TicketsService {
     private readonly ticketsRepository: MongoRepository<Ticket>,
     @InjectRepository(Attachment)
     private readonly attachmentsRepository: MongoRepository<Attachment>,
+    private readonly caslAbilityFactory: CaslAbilityFactory,
   ) {}
 
   async create(
@@ -75,7 +77,19 @@ export class TicketsService {
     return this.ticketsRepository.save(savedTicket);
   }
 
-  async findByClientId(clientId: string): Promise<Ticket[]> {
+  async findByClientId(clientId: string, user: AuthenticatedUser): Promise<Ticket[]> {
+    const ability = this.caslAbilityFactory.createForUser(user);
+    const isAdmin = ability.can(Action.Manage, 'all');
+    const canReadOwnClientTickets =
+      ability.can(Action.Read, 'Ticket') && user.sub === clientId;
+    const canReadClientTickets = isAdmin || canReadOwnClientTickets;
+
+    if (!canReadClientTickets) {
+      throw new ForbiddenException(
+        'Only the owner of the tickets or an admin can access this resource',
+      );
+    }
+
     return this.ticketsRepository.find({
       where: { clientId } as any,
       order: { createdAt: 'DESC' } as any,
