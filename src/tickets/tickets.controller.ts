@@ -2,6 +2,8 @@ import {
   Body,
   Controller,
   ForbiddenException,
+  Get,
+  Param,
   Post,
   Req,
   UseGuards,
@@ -35,6 +37,19 @@ type RequestWithUser = {
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
+
+  @Get('client/:clientId')
+  @UseGuards(AuthGuard('jwt'))
+  findClientTickets(@Param('clientId') clientId: string, @Req() req: RequestWithUser) {
+    const isAdmin = req.user.role === UserRole.Admin;
+    const isOwner = req.user.sub === clientId;
+
+    if (!isAdmin && !isOwner) {
+      throw new ForbiddenException('Only the owner or an admin can access these tickets');
+    }
+
+    return this.ticketsService.findByClientId(clientId);
+  }
 
   @Post()
   @UseGuards(AuthGuard('jwt'))

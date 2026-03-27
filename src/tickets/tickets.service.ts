@@ -80,5 +80,12 @@ export class TicketsService {
 
     return this.ticketsRepository.save(savedTicket);
   }
+
+  async findByClientId(clientId: string): Promise<Ticket[]> {
+    return this.ticketsRepository.find({
+      where: { clientId } as any,
+      order: { createdAt: 'DESC' } as any,
+    });
+  }
 }
 
