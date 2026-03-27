@@ -8,6 +8,8 @@ import { AuthModule } from './auth/auth.module';
 import { TicketsModule } from './tickets/tickets.module';
 import { BusboyModule } from 'nestjs-busboy';
 import { join } from 'node:path';
+import { APP_GUARD } from '@nestjs/core';
+import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 
 @Module({
   imports: [
@@ -31,7 +33,13 @@ import { join } from 'node:path';
     TicketsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+    AppService,
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+  ],
 })
 export class AppModule {
   constructor() {}

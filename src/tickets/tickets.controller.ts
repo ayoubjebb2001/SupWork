@@ -10,7 +10,6 @@ import {
   UseInterceptors,
   UploadedFiles,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
 import { UserRole } from 'src/enums/user.enums';
@@ -42,7 +41,7 @@ export class TicketsController {
 
   @Get('client/:clientId')
   @Roles(UserRole.Admin, UserRole.Client)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   findClientTickets(@Param('clientId') clientId: string, @Req() req: RequestWithUser) {
 
     if (req.user.role == UserRole.Client && req.user.sub !== clientId) {
@@ -54,7 +53,7 @@ export class TicketsController {
 
   @Post()
   @Roles(UserRole.Client)
-  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @UseGuards(RolesGuard)
   @UseInterceptors(
     FilesInterceptor('files', 5, {
       storage: diskStorage({
