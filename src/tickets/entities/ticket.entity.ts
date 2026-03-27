@@ -24,6 +24,9 @@ export class Ticket {
   @Column({ nullable: true })
   assignedAgentId?: string;
 
+  @Column({ default: [] })
+  attachmentIds: string[];
+
   @Column()
   createdAt: Date;
 

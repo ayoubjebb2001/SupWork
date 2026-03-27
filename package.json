@@ -33,6 +33,7 @@
     "class-validator": "^0.14.4",
     "mongodb": "^6.21.0",
     "ms": "^2.1.3",
+    "nestjs-busboy": "^1.0.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
