@@ -6,6 +6,8 @@ import { ConfigModule } from '@nestjs/config';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { TicketsModule } from './tickets/tickets.module';
+import { AuditModule } from './audit/audit.module';
+import { StatsModule } from './stats/stats.module';
 import { BusboyModule } from 'nestjs-busboy';
 import { join } from 'node:path';
 import { APP_GUARD } from '@nestjs/core';
@@ -14,6 +16,7 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    AuditModule,
     BusboyModule.register({
       dest: join(process.cwd(), 'uploads'),
       limits: {
@@ -31,6 +34,7 @@ import { JwtAuthGuard } from 'src/common/guards/jwt-auth.guard';
     UsersModule,
     AuthModule,
     TicketsModule,
+    StatsModule,
   ],
   controllers: [AppController],
   providers: [

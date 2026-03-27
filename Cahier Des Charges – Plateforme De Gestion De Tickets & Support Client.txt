@@ -1,0 +1,159 @@
+﻿Cahier des charges – Plateforme de gestion de tickets et support client - SupWork
+1. Contexte du projet
+Ce projet s’inscrit dans une démarche de montée en compétences Backend Fullstack JavaScript et vise à concevoir une plateforme professionnelle de gestion de tickets et support client, similaire aux solutions utilisées en entreprise (Zendesk, Freshdesk, Jira Service Management).
+L’application permettra aux clients de soumettre des demandes de support, aux agents de les traiter, et aux administrateurs de superviser l’ensemble du système.
+________________
+
+
+2. Objectifs du projet
+Objectifs pédagogiques
+* Maîtriser le développement d’une API REST sécurisée
+* Implémenter des mécanismes avancés d’authentification et d’autorisation
+* Appliquer les bonnes pratiques backend (tests, logs, sécurité, architecture)
+* Mettre en place une chaîne DevOps complète (Docker, CI/CD, déploiement)
+Objectifs fonctionnels
+* Centraliser et organiser les demandes de support
+* Améliorer le suivi et la qualité du support client
+* Offrir une plateforme fiable, sécurisée et scalable
+________________
+
+
+3. Acteurs et rôles
+3.1 Client
+* Créer des tickets
+* Ajouter des commentaires et pièces jointes
+* Suivre l’état de ses tickets
+* Recevoir des notifications
+3.2 Agent
+* Consulter les tickets assignés
+* Mettre à jour le statut des tickets
+* Répondre aux clients
+* Consulter les statistiques personnelles
+3.3 Administrateur
+* Gérer les utilisateurs et rôles
+* Assigner les tickets aux agents
+* Superviser l’activité globale
+* Accéder aux statistiques et logs
+________________
+
+
+4. Fonctionnalités détaillées
+4.1 Authentification et sécurité
+* Inscription et connexion sécurisées
+* Authentification JWT + Refresh Token
+* Vérification d’email
+* Réinitialisation de mot de passe (Reset Password)
+* Authentification à deux facteurs (2FA via OTP)
+* Gestion des sessions et device tracking
+4.2 Gestion des rôles et permissions (RBAC)
+* Rôles : Admin, Agent, Client
+* Protection des routes selon les rôles
+* Middleware d’autorisation
+4.3 Gestion des tickets
+* Création, modification et suppression (soft delete)
+* Attribution des tickets aux agents
+* Workflow d’état :
+   * OPEN
+   * IN_PROGRESS
+   * RESOLVED
+* Ajout de commentaires
+* Upload de fichiers (images, screenshots)
+4.4 Recherche, filtres et pagination
+* Pagination côté backend
+* Filtres avancés : statut, date, priorité, agent
+* Recherche par mot-clé
+4.5 Statistiques et reporting
+* Nombre de tickets par statut
+* Temps moyen de résolution
+* Performance par agent
+* Activité globale de la plateforme
+4.6 Notifications
+* Notifications internes (in-app)
+* Envoi d’emails automatiques
+* Notifications push
+* Notifications SMS (mock)
+4.7 Logs et audit trail
+* Journalisation des actions importantes
+* Historique des modifications de tickets
+* Traçabilité des 
+________________
+
+
+5. Architecture technique
+5.1 Backend
+* Node.js / Nest.js
+* Architecture MVC / Clean Architecture
+* Base de données : MongoDB
+* ODM : Mongoose / Prisma
+* Sécurité : JWT, bcrypt, middlewares
+* Gestion centralisée des erreurs (Winston / Pino)
+5.2 Frontend
+* React.js / Next.js
+* Hooks obligatoires : useState, useEffect
+* Routing
+* Routes protégées (Protected Routes)
+* Gestion d’état globale : Redux Toolkit ou Context API
+________________
+
+
+6. Tests et qualité logicielle
+* Tests unitaires pour chaque controller
+* Tests d’intégration (API)
+* Outils : Jest, Supertest
+* Respect des principes : DRY, SRP
+* Validation stricte des entrées utilisateur
+________________
+
+
+7. Déploiement et DevOps
+7.1 Docker
+* Image Docker Backend
+* Image Docker Frontend
+* Docker Compose avec network partagé
+7.2 CI/CD
+* Pipeline CI/CD automatisé
+* Étapes :
+   * Lint & Tests
+   * Build
+   * Docker Image
+   * Déploiement
+7.3 Hébergement
+* Déploiement sur : Heroku / AWS / Azure / autres
+* Gestion des variables d’environnement
+* Sécurisation de la base de données
+________________
+
+
+8. Monitoring et observabilité
+* Monitoring des performances
+* Centralisation des logs
+* Alertes en cas d’erreur
+* Suivi de la disponibilité du service
+________________
+
+
+9. Livrables attendus
+* Code source versionné (GitHub)
+* Images Docker Backend & Frontend
+* Pipeline CI/CD fonctionnel
+* Application déployée (API + Frontend)
+* Documentation technique (README)
+* Slides de présentation
+________________
+
+
+10. Critères de performance
+* Structure claire du projet
+* Code lisible et maintenable
+* Sécurité et gestion des accès
+* Tests automatisés
+* Respect des bonnes pratiques backend
+* Capacité à expliquer l’architecture et les choix techniques
+________________
+
+
+Ce cahier des charges constitue la référence officielle pour la réalisation de la plateforme de gestion de tickets et support client.
+
+Ayoub Jebbouri 
+                                                                                                          MERNERDS
+                                                2025/2026

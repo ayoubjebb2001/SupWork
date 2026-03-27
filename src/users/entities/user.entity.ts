@@ -12,7 +12,7 @@ export class User {
   @Column()
   lastname: string;
 
-  @Column({unique: true})
+  @Column({ unique: true })
   email: string;
 
   @Column()
@@ -21,10 +21,10 @@ export class User {
   @Column()
   role: UserRole;
 
-  @Column({default: false})
+  @Column({ default: false })
   isTwoFactorEnabled: boolean;
 
-  @Column({default: UserStatus.Active})
+  @Column({ default: UserStatus.Active })
   status: UserStatus;
 
   @Column()
@@ -44,5 +44,4 @@ export class User {
 
   @Column()
   companyName?: string;
-
 }

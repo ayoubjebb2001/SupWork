@@ -32,5 +32,10 @@ export class Ticket {
 
   @Column()
   updatedAt: Date;
-}
 
+  @Column({ nullable: true })
+  deletedAt?: Date;
+
+  @Column({ nullable: true })
+  resolvedAt?: Date;
+}

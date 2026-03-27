@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { CreateAgentDto } from './dto/create-agent.dto';
 import { CreateUserDto } from './dto/create-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
@@ -18,7 +19,7 @@ import { ObjectId } from 'mongodb';
 
 const scrypt = promisify(scryptCallback);
 
-type SafeUser = Omit<User, 'passwordHash'>;
+export type SafeUser = Omit<User, 'passwordHash' | '_id'> & { _id: string };
 
 @Injectable()
 export class UsersService {
@@ -40,7 +41,9 @@ export class UsersService {
     });
 
     if (existingUser) {
-      throw new ConflictException('Email or Phone number is already registered');
+      throw new ConflictException(
+        'Email or Phone number is already registered',
+      );
     }
 
     const passwordHash = await this.hashPassword(createUserDto.password);
@@ -66,8 +69,44 @@ export class UsersService {
     return users.map((user) => this.sanitizeUser(user));
   }
 
+  async createAgent(dto: CreateAgentDto): Promise<SafeUser> {
+    const normalizedEmail = dto.email.trim().toLowerCase();
+
+    const existingUser = await this.usersRepository.findOne({
+      where: {
+        $or: [{ email: normalizedEmail }, { phoneNumber: dto.phoneNumber }],
+      } as any,
+    });
+
+    if (existingUser) {
+      throw new ConflictException(
+        'Email or Phone number is already registered',
+      );
+    }
+
+    const passwordHash = await this.hashPassword(dto.password);
+
+    const user = this.usersRepository.create({
+      firstName: dto.firstName,
+      lastname: dto.lastName,
+      email: normalizedEmail,
+      phoneNumber: dto.phoneNumber,
+      passwordHash,
+      role: UserRole.Agent,
+      status: UserStatus.Active,
+      isTwoFactorEnabled: false,
+      department: dto.department,
+      jobTitle: dto.jobTitle,
+    });
+
+    const savedUser = await this.usersRepository.save(user);
+    return this.sanitizeUser(savedUser);
+  }
+
   async findOne(id: string): Promise<SafeUser> {
-    const user = await this.usersRepository.findOne({ where: { _id: new ObjectId(id) } });
+    const user = await this.usersRepository.findOne({
+      where: { _id: new ObjectId(id) },
+    });
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -80,8 +119,10 @@ export class UsersService {
     return `${salt}:${derivedKey.toString('hex')}`;
   }
 
-
-  async comparePassword(password: string, passwordHash: string): Promise<boolean> {
+  async comparePassword(
+    password: string,
+    passwordHash: string,
+  ): Promise<boolean> {
     const [salt, storedHash] = passwordHash.split(':');
     if (!salt || !storedHash) {
       return false;
@@ -95,7 +136,11 @@ export class UsersService {
   }
 
   private sanitizeUser(user: User): SafeUser {
-    const { passwordHash, ...safeUser } = user;
-    return safeUser;
+    const { passwordHash: _ph, _id, ...rest } = user;
+    void _ph;
+    return {
+      ...rest,
+      _id: _id.toString(),
+    };
   }
 }

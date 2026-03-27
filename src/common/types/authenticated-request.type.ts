@@ -9,4 +9,3 @@ export type AuthenticatedUser = {
 export type AuthenticatedRequest = {
   user?: AuthenticatedUser;
 };
-

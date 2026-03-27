@@ -26,4 +26,3 @@ export class Attachment {
   @Column()
   createdAt: Date;
 }
-

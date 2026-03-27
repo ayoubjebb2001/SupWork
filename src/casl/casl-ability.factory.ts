@@ -32,14 +32,34 @@ export class CaslAbilityFactory {
     if (user.role === UserRole.Client) {
       can(Action.Create, 'Ticket');
       can(Action.Read, 'Ticket', { clientId: user.sub });
+      can(Action.Delete, 'Ticket', { clientId: user.sub });
+    }
+
+    if (user.role === UserRole.Agent) {
+      can(Action.Read, 'Ticket', { assignedAgentId: user.sub });
+      can(Action.Update, 'Ticket', { assignedAgentId: user.sub });
     }
 
     return build({
-      detectSubjectType: (item) =>
-        item.constructor as Extract<Subjects, Record<string, unknown>>,
-    });
+      detectSubjectType: (item: unknown) => {
+        if (typeof item === 'string') {
+          return item;
+        }
+        if (!item || typeof item !== 'object') {
+          return item;
+        }
+        const o = item as Record<string, unknown>;
+        if (
+          typeof o.title === 'string' &&
+          typeof o.clientId === 'string' &&
+          'status' in o
+        ) {
+          return Ticket;
+        }
+        return (item as Ticket).constructor;
+      },
+    } as Parameters<typeof build>[0]);
   }
 }
 
 export type AppRawRule = RawRuleOf<AppAbility>;
-
