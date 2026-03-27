@@ -4,12 +4,15 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
 import { InjectRepository } from '@nestjs/typeorm';
 import { User } from './entities/user.entity';
 import { MongoRepository } from 'typeorm';
 import { UserRole, UserStatus } from 'src/enums/user.enums';
-import { randomBytes, scrypt as scryptCallback, timingSafeEqual } from 'node:crypto';
+import {
+  randomBytes,
+  scrypt as scryptCallback,
+  timingSafeEqual,
+} from 'node:crypto';
 import { promisify } from 'node:util';
 
 const scrypt = promisify(scryptCallback);
@@ -24,8 +27,15 @@ export class UsersService {
   ) {}
 
   async createClientSignup(createUserDto: CreateUserDto): Promise<SafeUser> {
+    const normalizedEmail = createUserDto.email.trim().toLowerCase();
+
     const existingUser = await this.usersRepository.findOne({
-      where: { email: createUserDto.email, phoneNumber: createUserDto.phoneNumber },
+      where: {
+        $or: [
+          { email: normalizedEmail },
+          { phoneNumber: createUserDto.phoneNumber },
+        ],
+      } as any,
     });
 
     if (existingUser) {
@@ -37,12 +47,11 @@ export class UsersService {
     const user = this.usersRepository.create({
       firstName: createUserDto.firstName,
       lastname: createUserDto.lastName,
-      email: createUserDto.email,
+      email: normalizedEmail,
       phoneNumber: createUserDto.phoneNumber,
       passwordHash,
       role: UserRole.Client,
-      status: UserStatus.PENDING,
-      isEmailVerified: false,
+      status: UserStatus.Active,
       isTwoFactorEnabled: false,
       companyName: createUserDto.companyName,
     });
