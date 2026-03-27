@@ -1,17 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { UserRole } from 'src/enums/user.enums';
+import { AuthenticatedUser } from 'src/common/types/authenticated-request.type';
 import { MongoRepository } from 'typeorm';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { Ticket } from './entities/ticket.entity';
 import { TicketStatus } from 'src/enums/ticket.enums';
 import { Attachment } from './entities/attachment.entity';
-
-type JwtUser = {
-  sub: string;
-  role: UserRole;
-  email: string;
-};
 
 type UploadedFile = {
   originalname?: string;
@@ -33,7 +27,7 @@ export class TicketsService {
 
   async create(
     createTicketDto: CreateTicketDto,
-    user: JwtUser,
+    user: AuthenticatedUser,
     files: UploadedFile[] = [],
   ): Promise<Ticket> {
     const now = new Date();

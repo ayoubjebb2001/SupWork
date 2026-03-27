@@ -12,6 +12,10 @@ import {
 } from '@nestjs/common';
 import { Roles } from 'src/common/decorators/roles.decorator';
 import { RolesGuard } from 'src/common/guards/roles.guard';
+import type {
+  AuthenticatedRequest,
+  AuthenticatedUser,
+} from 'src/common/types/authenticated-request.type';
 import { UserRole } from 'src/enums/user.enums';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketsService } from './tickets.service';
@@ -27,14 +31,6 @@ type UploadedFile = {
   destination?: string;
 };
 
-type RequestWithUser = {
-  user: {
-    sub: string;
-    role: UserRole;
-    email: string;
-  };
-};
-
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
@@ -42,9 +38,10 @@ export class TicketsController {
   @Get('client/:clientId')
   @Roles(UserRole.Admin, UserRole.Client)
   @UseGuards(RolesGuard)
-  findClientTickets(@Param('clientId') clientId: string, @Req() req: RequestWithUser) {
+  findClientTickets(@Param('clientId') clientId: string, @Req() req: AuthenticatedRequest) {
+    const user = req.user as AuthenticatedUser;
 
-    if (req.user.role == UserRole.Client && req.user.sub !== clientId) {
+    if (user.role === UserRole.Client && user.sub !== clientId) {
       throw new ForbiddenException('You are not authorized to access this resource');
     }
 
@@ -69,10 +66,14 @@ export class TicketsController {
   )
   create(
     @Body() createTicketDto: CreateTicketDto,
-    @Req() req: RequestWithUser,
+    @Req() req: AuthenticatedRequest,
     @UploadedFiles() files: UploadedFile[],
   ) {
-    return this.ticketsService.create(createTicketDto, req.user, files ?? []);
+    return this.ticketsService.create(
+      createTicketDto,
+      req.user as AuthenticatedUser,
+      files ?? [],
+    );
   }
 }
 
