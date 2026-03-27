@@ -1,8 +1,17 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { CaslAbilityFactory, Action } from 'src/casl/casl-ability.factory';
 import { AuthenticatedUser } from 'src/common/types/authenticated-request.type';
+import { UserRole } from 'src/enums/user.enums';
+import { UsersService } from 'src/users/users.service';
+import { ObjectId } from 'mongodb';
 import { MongoRepository } from 'typeorm';
+import { AdminListTicketsQueryDto } from './dto/admin-list-tickets-query.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { Ticket } from './entities/ticket.entity';
 import { TicketStatus } from 'src/enums/ticket.enums';
@@ -25,6 +34,7 @@ export class TicketsService {
     @InjectRepository(Attachment)
     private readonly attachmentsRepository: MongoRepository<Attachment>,
     private readonly caslAbilityFactory: CaslAbilityFactory,
+    private readonly usersService: UsersService,
   ) {}
 
   async create(
@@ -94,6 +104,61 @@ export class TicketsService {
       where: { clientId } as any,
       order: { createdAt: 'DESC' } as any,
     });
+  }
+
+  async adminFindWithFilters(query: AdminListTicketsQueryDto): Promise<Ticket[]> {
+    const where: Record<string, unknown> = {};
+    if (query.status) {
+      where.status = query.status;
+    }
+    if (query.priority) {
+      where.priority = query.priority;
+    }
+    if (query.assignedAgentId) {
+      where.assignedAgentId = query.assignedAgentId;
+    }
+    if (query.dateFrom || query.dateTo) {
+      const range: Record<string, Date> = {};
+      if (query.dateFrom) {
+        range.$gte = new Date(query.dateFrom);
+      }
+      if (query.dateTo) {
+        range.$lte = new Date(query.dateTo);
+      }
+      where.createdAt = range;
+    }
+
+    return this.ticketsRepository.find({
+      where: where as any,
+      order: { createdAt: 'DESC' } as any,
+    });
+  }
+
+  async assignTicketToAgent(ticketId: string, agentId: string): Promise<Ticket> {
+
+    const ticket = await this.ticketsRepository.findOne({
+      where: { _id: new ObjectId(ticketId) } as any,
+    });
+
+    if (!ticket) {
+      throw new NotFoundException('Ticket not found');
+    }
+
+    if (ticket.status !== TicketStatus.OPEN) {
+      throw new BadRequestException(
+        'Only tickets in OPEN status can be assigned to an agent',
+      );
+    }
+
+    const agent = await this.usersService.findOne(agentId);
+    if (agent.role !== UserRole.Agent) {
+      throw new BadRequestException('The selected user must have the Agent role');
+    }
+
+    ticket.assignedAgentId = agentId;
+    ticket.updatedAt = new Date();
+
+    return this.ticketsRepository.save(ticket);
   }
 }
 

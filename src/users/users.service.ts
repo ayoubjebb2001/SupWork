@@ -14,6 +14,7 @@ import {
   timingSafeEqual,
 } from 'node:crypto';
 import { promisify } from 'node:util';
+import { ObjectId } from 'mongodb';
 
 const scrypt = promisify(scryptCallback);
 
@@ -66,7 +67,7 @@ export class UsersService {
   }
 
   async findOne(id: string): Promise<SafeUser> {
-    const user = await this.usersRepository.findOne({ where: { _id: id as any } });
+    const user = await this.usersRepository.findOne({ where: { _id: new ObjectId(id) } });
     if (!user) {
       throw new NotFoundException('User not found');
     }

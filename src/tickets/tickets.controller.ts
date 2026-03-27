@@ -3,7 +3,9 @@ import {
   Controller,
   Get,
   Param,
+  Patch,
   Post,
+  Query,
   Req,
   UseGuards,
   UseInterceptors,
@@ -16,6 +18,8 @@ import type {
   AuthenticatedRequest,
   AuthenticatedUser,
 } from 'src/common/types/authenticated-request.type';
+import { AdminListTicketsQueryDto } from './dto/admin-list-tickets-query.dto';
+import { AssignTicketDto } from './dto/assign-ticket.dto';
 import { CreateTicketDto } from './dto/create-ticket.dto';
 import { TicketsService } from './tickets.service';
 import { FilesInterceptor, diskStorage } from 'nestjs-busboy';
@@ -33,6 +37,25 @@ type UploadedFile = {
 @Controller('tickets')
 export class TicketsController {
   constructor(private readonly ticketsService: TicketsService) {}
+
+  @Get('admin')
+  @CheckPolicies((ability) => ability.can(Action.Manage, 'all'))
+  @UseGuards(PoliciesGuard)
+  adminListTickets(@Query() query: AdminListTicketsQueryDto) {
+    return this.ticketsService.adminFindWithFilters(query);
+  }
+
+  @Patch('admin/assign')
+  @CheckPolicies((ability) => ability.can(Action.Manage, 'all'))
+  @UseGuards(PoliciesGuard)
+  adminAssignTicket(
+    @Body() assignTicketDto: AssignTicketDto,
+  ) {
+    return this.ticketsService.assignTicketToAgent(
+      assignTicketDto.ticketId,
+      assignTicketDto.agentId,
+    );
+  }
 
   @Get('client/:clientId')
   @CheckPolicies((ability) => ability.can(Action.Read, 'Ticket'))
