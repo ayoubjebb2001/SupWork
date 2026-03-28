@@ -5,13 +5,15 @@ import { useParams, useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import type { Ticket } from '@/types/ticket';
-
-type Comment = {
-  _id: { toString(): string } | string;
-  body: string;
-  authorUserId: string;
-  createdAt: string;
-};
+import { StatusBadge } from '@/components/tickets/StatusBadge';
+import { PriorityBadge } from '@/components/tickets/PriorityBadge';
+import {
+  CommentThread,
+  type ThreadComment,
+} from '@/components/tickets/CommentThread';
+import { PageShell } from '@/components/ui/PageShell';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function ClientTicketDetailPage() {
   const params = useParams();
@@ -19,9 +21,12 @@ export default function ClientTicketDetailPage() {
   const { user, ready } = useAuth();
   const router = useRouter();
   const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<ThreadComment[]>([]);
   const [body, setBody] = useState('');
-  const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+  const [commentErr, setCommentErr] = useState('');
+  const [commentBusy, setCommentBusy] = useState(false);
 
   useEffect(() => {
     if (!ready) {
@@ -32,86 +37,92 @@ export default function ClientTicketDetailPage() {
       return;
     }
     let cancelled = false;
+    setLoadError('');
     void (async () => {
       try {
         const t = await apiFetch<Ticket>(`/tickets/${id}`);
-        const c = await apiFetch<Comment[]>(`/tickets/${id}/comments`);
+        const c = await apiFetch<ThreadComment[]>(`/tickets/${id}/comments`);
         if (!cancelled) {
           setTicket(t);
           setComments(c);
         }
       } catch (err) {
         if (!cancelled && err instanceof Error) {
-          setError(err.message);
+          setLoadError(err.message);
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [user, ready, id, router]);
+  }, [user, ready, id, router, retryKey]);
 
   async function addComment(e: React.FormEvent) {
     e.preventDefault();
-    setError('');
-    await apiFetch(`/tickets/${id}/comments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body }),
-    });
-    setBody('');
-    const t = await apiFetch<Ticket>(`/tickets/${id}`);
-    const c = await apiFetch<Comment[]>(`/tickets/${id}/comments`);
-    setTicket(t);
-    setComments(c);
+    setCommentErr('');
+    setCommentBusy(true);
+    try {
+      await apiFetch(`/tickets/${id}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body }),
+      });
+      setBody('');
+      const t = await apiFetch<Ticket>(`/tickets/${id}`);
+      const c = await apiFetch<ThreadComment[]>(`/tickets/${id}/comments`);
+      setTicket(t);
+      setComments(c);
+    } catch (err) {
+      setCommentErr(err instanceof Error ? err.message : 'Could not send comment');
+    } finally {
+      setCommentBusy(false);
+    }
   }
 
-  if (!ticket) {
+  if (!ticket && !loadError) {
     return (
-      <div className="layout">
-        {error ? <p className="error">{error}</p> : <p>Loading…</p>}
-      </div>
+      <PageShell>
+        <LoadingState label="Loading ticket…" />
+      </PageShell>
     );
   }
 
+  if (loadError && !ticket) {
+    return (
+      <PageShell>
+        <ErrorBanner
+          message={loadError}
+          onRetry={() => setRetryKey((k) => k + 1)}
+        />
+      </PageShell>
+    );
+  }
+
+  if (!ticket) {
+    return null;
+  }
+
   return (
-    <div className="layout">
+    <PageShell>
       <div className="card">
-        <h1>{ticket.title}</h1>
-        <p style={{ color: 'var(--muted)' }}>
-          {ticket.status} · {ticket.priority}
+        <h1 style={{ marginTop: 0 }}>{ticket.title}</h1>
+        <p style={{ marginBottom: 'var(--space-3)' }}>
+          <StatusBadge status={ticket.status} />{' '}
+          <PriorityBadge priority={ticket.priority} />
         </p>
-        <p>{ticket.description}</p>
+        <p className="break-words">{ticket.description}</p>
       </div>
-      <h2>Comments</h2>
-      <div className="card">
-        {comments.map((c) => (
-          <div
-            key={typeof c._id === 'string' ? c._id : c._id.toString()}
-            style={{ marginBottom: '0.75rem' }}
-          >
-            <small style={{ color: 'var(--muted)' }}>
-              {c.authorUserId} · {new Date(c.createdAt).toLocaleString()}
-            </small>
-            <p style={{ margin: '0.25rem 0 0' }}>{c.body}</p>
-          </div>
-        ))}
-        <form onSubmit={addComment}>
-          <div className="field">
-            <label htmlFor="b">Add comment</label>
-            <textarea
-              id="b"
-              rows={3}
-              value={body}
-              onChange={(e) => setBody(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit" className="btn secondary">
-            Send
-          </button>
-        </form>
-      </div>
-    </div>
+      <CommentThread
+        comments={comments}
+        body={body}
+        onBodyChange={setBody}
+        onSubmit={addComment}
+        submitLabel="Send"
+        composerLabel="Add comment"
+        submitting={commentBusy}
+        error={commentErr}
+        showTimestamp
+      />
+    </PageShell>
   );
 }

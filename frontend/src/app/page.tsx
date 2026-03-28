@@ -3,6 +3,8 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/AuthProvider';
+import { PageShell } from '@/components/ui/PageShell';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function HomePage() {
   const { user, ready } = useAuth();
@@ -26,8 +28,8 @@ export default function HomePage() {
   }, [user, ready, router]);
 
   return (
-    <div className="layout">
-      <p style={{ color: 'var(--muted)' }}>Loading…</p>
-    </div>
+    <PageShell>
+      <LoadingState />
+    </PageShell>
   );
 }

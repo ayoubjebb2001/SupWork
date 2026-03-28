@@ -1,12 +1,46 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import type { Paginated, Ticket } from '@/types/ticket';
 import { ticketId } from '@/types/ticket';
+import { StatusBadge } from '@/components/tickets/StatusBadge';
+import { PriorityBadge } from '@/components/tickets/PriorityBadge';
+import { PageShell } from '@/components/ui/PageShell';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { LoadingState } from '@/components/ui/LoadingState';
+import { StatCard } from '@/components/ui/StatCard';
+
+type AgentUser = {
+  _id: string;
+  firstName: string;
+  lastname: string;
+  email: string;
+  role: string;
+  department?: string;
+  jobTitle?: string;
+};
+
+type LeaderRow = {
+  agentId: string;
+  resolvedCount: number;
+  averageResolutionMs: number | null;
+};
+
+function formatAgentOption(a: AgentUser): string {
+  const name = `${a.firstName} ${a.lastname}`.trim();
+  const extra = [a.jobTitle, a.department].filter(Boolean).join(' · ');
+  const tail = extra ? ` — ${extra}` : '';
+  return `${name} (${a.email})${tail}`;
+}
+
+function idOf(u: AgentUser): string {
+  return u._id;
+}
 
 export default function AdminDashboardPage() {
   const { user, ready } = useAuth();
@@ -17,16 +51,38 @@ export default function AdminDashboardPage() {
     totalTickets: number;
     averageResolutionMs: number | null;
   } | null>(null);
-  const [agents, setAgents] = useState<
-    {
-      agentId: string;
-      resolvedCount: number;
-      averageResolutionMs: number | null;
-    }[]
-  >([]);
-  const [assignTicketId, setAssignTicketId] = useState('');
-  const [assignAgentId, setAssignAgentId] = useState('');
+  const [leaderboard, setLeaderboard] = useState<LeaderRow[]>([]);
+  const [agentUsers, setAgentUsers] = useState<AgentUser[]>([]);
+  const [assignPick, setAssignPick] = useState<Record<string, string>>({});
+  const [assigningTicketId, setAssigningTicketId] = useState<string | null>(
+    null,
+  );
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
+
+  const agentById = useMemo(() => {
+    const m = new Map<string, AgentUser>();
+    for (const a of agentUsers) {
+      m.set(idOf(a), a);
+    }
+    return m;
+  }, [agentUsers]);
+
+  const refreshTickets = useCallback(async () => {
+    const t = await apiFetch<Paginated<Ticket>>(`/tickets/admin?page=1&limit=50`);
+    setTickets(t);
+    setAssignPick((prev) => {
+      const next = { ...prev };
+      for (const row of t.data) {
+        const tid = ticketId(row);
+        if (next[tid] === undefined) {
+          next[tid] = row.assignedAgentId ?? '';
+        }
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!ready) {
@@ -36,126 +92,259 @@ export default function AdminDashboardPage() {
       router.replace('/login');
       return;
     }
+    let cancelled = false;
+    setLoadError('');
     Promise.all([
-      apiFetch<Paginated<Ticket>>(`/tickets/admin?page=1&limit=30`),
+      apiFetch<Paginated<Ticket>>(`/tickets/admin?page=1&limit=50`),
       apiFetch(`/stats/admin`),
       apiFetch(`/stats/admin/agents`),
+      apiFetch<AgentUser[]>(`/users`),
     ])
-      .then(([t, g, a]) => {
+      .then(([t, g, lb, allUsers]) => {
+        if (cancelled) {
+          return;
+        }
         setTickets(t);
         setGlobalStats(g as typeof globalStats);
-        setAgents(a as typeof agents);
+        setLeaderboard(lb as LeaderRow[]);
+        const agents = allUsers.filter((u) => u.role === 'AGENT');
+        setAgentUsers(agents);
+        const initial: Record<string, string> = {};
+        for (const row of t.data) {
+          initial[ticketId(row)] = row.assignedAgentId ?? '';
+        }
+        setAssignPick(initial);
       })
-      .catch((e: Error) => setError(e.message));
-  }, [user, ready, router]);
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setLoadError(e.message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, ready, router, retryKey]);
 
-  async function assign(e: React.FormEvent) {
-    e.preventDefault();
+  async function assignRow(ticket: Ticket) {
+    const tid = ticketId(ticket);
+    const agentId = assignPick[tid]?.trim();
+    if (!agentId) {
+      setError('Choose an agent first.');
+      return;
+    }
     setError('');
-    await apiFetch(`/tickets/admin/assign`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticketId: assignTicketId,
-        agentId: assignAgentId,
-      }),
-    });
-    setAssignTicketId('');
-    setAssignAgentId('');
-    const t = await apiFetch<Paginated<Ticket>>(`/tickets/admin?page=1&limit=30`);
-    setTickets(t);
+    setAssigningTicketId(tid);
+    try {
+      await apiFetch(`/tickets/admin/assign`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticketId: tid, agentId }),
+      });
+      await refreshTickets();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Assign failed');
+    } finally {
+      setAssigningTicketId(null);
+    }
+  }
+
+  function assigneeLabel(ticket: Ticket): string {
+    const aid = ticket.assignedAgentId;
+    if (!aid) {
+      return '—';
+    }
+    const u = agentById.get(aid);
+    if (!u) {
+      return `${aid.slice(0, 8)}…`;
+    }
+    return `${u.firstName} ${u.lastname} (${u.email})`;
   }
 
   if (!ready || !user) {
     return (
-      <div className="layout">
-        <p>Loading…</p>
-      </div>
+      <PageShell>
+        <LoadingState />
+      </PageShell>
     );
   }
 
   return (
-    <div className="layout">
-      <h1>Admin</h1>
-      <p>
-        <Link href="/admin/users">Users</Link>
-        {' · '}
-        <Link href="/audit/logs">Audit log</Link>
-      </p>
-      {globalStats && (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <strong>Global</strong>
-          <p style={{ color: 'var(--muted)' }}>
-            Total: {globalStats.totalTickets} · OPEN:{' '}
-            {globalStats.countByStatus['OPEN'] ?? 0} · IN_PROGRESS:{' '}
-            {globalStats.countByStatus['IN_PROGRESS'] ?? 0} · RESOLVED:{' '}
-            {globalStats.countByStatus['RESOLVED'] ?? 0}
-            {globalStats.averageResolutionMs != null
-              ? ` · Avg resolution: ${Math.round(globalStats.averageResolutionMs / 3600000)}h`
-              : ''}
-          </p>
-        </div>
-      )}
-      {agents.length > 0 && (
-        <div className="card" style={{ marginBottom: '1rem' }}>
-          <strong>Agents (resolved)</strong>
-          <ul>
-            {agents.slice(0, 8).map((a) => (
-              <li key={a.agentId}>
-                {a.agentId}: {a.resolvedCount} resolved
-              </li>
-            ))}
+    <PageShell>
+      <PageHeader
+        title="Admin"
+        meta={
+          <>
+            <Link href="/admin/users">Users</Link>
+            <span className="text-muted" aria-hidden>
+              ·
+            </span>
+            <Link href="/audit/logs">Audit log</Link>
+          </>
+        }
+      />
+      {loadError ? (
+        <ErrorBanner
+          message={loadError}
+          onRetry={() => setRetryKey((k) => k + 1)}
+        />
+      ) : null}
+      {globalStats ? (
+        <StatCard title="Global overview">
+          <div className="metric-row">
+            <div className="metric">
+              <div className="metric__value">{globalStats.totalTickets}</div>
+              <div className="metric__label">Total</div>
+            </div>
+            <div className="metric">
+              <div className="metric__value">
+                {globalStats.countByStatus['OPEN'] ?? 0}
+              </div>
+              <div className="metric__label">Open</div>
+            </div>
+            <div className="metric">
+              <div className="metric__value">
+                {globalStats.countByStatus['IN_PROGRESS'] ?? 0}
+              </div>
+              <div className="metric__label">In progress</div>
+            </div>
+            <div className="metric">
+              <div className="metric__value">
+                {globalStats.countByStatus['RESOLVED'] ?? 0}
+              </div>
+              <div className="metric__label">Resolved</div>
+            </div>
+            {globalStats.averageResolutionMs != null ? (
+              <div className="metric">
+                <div className="metric__value">
+                  {Math.round(globalStats.averageResolutionMs / 3600000)}h
+                </div>
+                <div className="metric__label">Avg resolution</div>
+              </div>
+            ) : null}
+          </div>
+        </StatCard>
+      ) : null}
+      {leaderboard.length > 0 ? (
+        <StatCard title="Agents — resolved volume">
+          <ul
+            style={{
+              margin: 0,
+              paddingLeft: '1.25rem',
+              color: 'var(--color-text-subtle)',
+              fontSize: '0.9375rem',
+            }}
+          >
+            {leaderboard.slice(0, 8).map((a) => {
+              const info = agentById.get(a.agentId);
+              const label = info
+                ? `${info.firstName} ${info.lastname}`
+                : a.agentId.slice(0, 8);
+              return (
+                <li key={a.agentId}>
+                  <strong style={{ color: 'var(--color-text)' }}>{label}</strong>
+                  : {a.resolvedCount} resolved
+                </li>
+              );
+            })}
           </ul>
-        </div>
-      )}
-      <div className="card" style={{ marginBottom: '1rem' }}>
-        <h2>Assign ticket</h2>
-        <form onSubmit={assign}>
-          <div className="field">
-            <label>Ticket ID</label>
-            <input
-              value={assignTicketId}
-              onChange={(e) => setAssignTicketId(e.target.value)}
-              required
-            />
-          </div>
-          <div className="field">
-            <label>Agent user ID</label>
-            <input
-              value={assignAgentId}
-              onChange={(e) => setAssignAgentId(e.target.value)}
-              required
-            />
-          </div>
-          <button type="submit" className="btn secondary">
-            Assign
-          </button>
-        </form>
-      </div>
+        </StatCard>
+      ) : null}
       {error ? <p className="error">{error}</p> : null}
-      {tickets && (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <h2>Recent tickets</h2>
+      {tickets ? (
+        <div className="card table-wrap">
+          <h2 style={{ marginTop: 0 }}>Tickets</h2>
+          <p className="text-muted">
+            Only tickets in <strong>OPEN</strong> status can be assigned. Pick an
+            agent and click Assign.
+          </p>
           <table>
             <thead>
               <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Status</th>
+                <th scope="col">Title</th>
+                <th scope="col">Status</th>
+                <th scope="col">Priority</th>
+                <th scope="col">Assignee</th>
+                <th scope="col">Assign to agent</th>
+                <th scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
-              {tickets.data.map((t) => (
-                <tr key={ticketId(t)}>
-                  <td style={{ fontSize: '0.75rem' }}>{ticketId(t)}</td>
-                  <td>{t.title}</td>
-                  <td>{t.status}</td>
-                </tr>
-              ))}
+              {tickets.data.map((t) => {
+                const tid = ticketId(t);
+                const canAssign = t.status === 'OPEN';
+                const busy = assigningTicketId === tid;
+                return (
+                  <tr key={tid}>
+                    <td className="min-w-0">
+                      <span
+                        className="break-words"
+                        style={{ display: 'block', maxWidth: '18rem' }}
+                        title={t.title}
+                      >
+                        {t.title}
+                      </span>
+                    </td>
+                    <td>
+                      <StatusBadge status={t.status} />
+                    </td>
+                    <td>
+                      <PriorityBadge priority={t.priority} />
+                    </td>
+                    <td className="text-muted" style={{ fontSize: '0.875rem', maxWidth: '14rem' }}>
+                      <span className="break-words">{assigneeLabel(t)}</span>
+                    </td>
+                    <td style={{ minWidth: '16rem' }}>
+                      <select
+                        className="admin-agent-select"
+                        value={assignPick[tid] ?? ''}
+                        disabled={!canAssign || busy || agentUsers.length === 0}
+                        onChange={(e) =>
+                          setAssignPick((prev) => ({
+                            ...prev,
+                            [tid]: e.target.value,
+                          }))
+                        }
+                        aria-label={`Assign agent for ${t.title}`}
+                      >
+                        <option value="">
+                          {agentUsers.length === 0
+                            ? 'No agents — add in Users'
+                            : 'Select agent…'}
+                        </option>
+                        {agentUsers.map((a) => (
+                          <option key={idOf(a)} value={idOf(a)}>
+                            {formatAgentOption(a)}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn secondary"
+                        disabled={
+                          !canAssign || busy || !assignPick[tid]?.trim()
+                        }
+                        onClick={() => assignRow(t)}
+                      >
+                        {busy ? '…' : 'Assign'}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          <p className="text-muted">
+            Showing {tickets.data.length} of {tickets.total} (page {tickets.page}
+            ).
+          </p>
         </div>
-      )}
-    </div>
+      ) : !loadError ? (
+        <LoadingState label="Loading dashboard…" />
+      ) : null}
+    </PageShell>
   );
 }

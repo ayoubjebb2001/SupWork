@@ -8,8 +8,10 @@ export function NavBar() {
 
   if (!user) {
     return (
-      <nav className="nav layout">
-        <strong>SupWork</strong>
+      <nav className="nav layout" aria-label="Main">
+        <Link href="/" className="brand">
+          Sup<span>Work</span>
+        </Link>
         <Link href="/login">Log in</Link>
         <Link href="/signup">Sign up</Link>
       </nav>
@@ -17,9 +19,11 @@ export function NavBar() {
   }
 
   return (
-    <nav className="nav layout">
-      <strong>SupWork</strong>
-      <span className="role">
+    <nav className="nav layout" aria-label="Main">
+      <Link href="/" className="brand">
+        Sup<span>Work</span>
+      </Link>
+      <span className="role truncate" title={user.email}>
         {user.email} · <span className="badge">{user.role}</span>
       </span>
       {user.role === 'CLIENT' && (

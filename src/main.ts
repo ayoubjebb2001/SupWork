@@ -24,6 +24,7 @@ async function bootstrap() {
 
   await app.register(fastifyCors, {
     origin,
+    methods: ['GET','HEAD','POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
   });
 

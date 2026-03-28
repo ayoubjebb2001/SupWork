@@ -3,6 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiBase } from '@/lib/api';
+import { parseErrorFromResponseBody } from '@/lib/parse-error';
+import { PageShell } from '@/components/ui/PageShell';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { InlineError } from '@/components/ui/ErrorBanner';
 
 export default function SignupPage() {
   const router = useRouter();
@@ -15,24 +19,30 @@ export default function SignupPage() {
     companyName: '',
   });
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
-    const res = await fetch(`${apiBase}/users/signup/client`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ...form,
-        companyName: form.companyName || undefined,
-      }),
-    });
-    const text = await res.text();
-    if (!res.ok) {
-      setError(text);
-      return;
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${apiBase}/users/signup/client`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...form,
+          companyName: form.companyName || undefined,
+        }),
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        setError(parseErrorFromResponseBody(text));
+        return;
+      }
+      router.replace('/login');
+    } finally {
+      setSubmitting(false);
     }
-    router.replace('/login');
   }
 
   function upd<K extends keyof typeof form>(k: K, v: string) {
@@ -40,8 +50,8 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="layout" style={{ maxWidth: 420 }}>
-      <h1>Client sign up</h1>
+    <PageShell variant="narrow">
+      <PageHeader title="Client sign up" />
       <form onSubmit={onSubmit} className="card">
         <div className="field">
           <label htmlFor="fn">First name</label>
@@ -51,6 +61,7 @@ export default function SignupPage() {
             onChange={(e) => upd('firstName', e.target.value)}
             required
             minLength={2}
+            disabled={submitting}
           />
         </div>
         <div className="field">
@@ -61,6 +72,7 @@ export default function SignupPage() {
             onChange={(e) => upd('lastName', e.target.value)}
             required
             minLength={2}
+            disabled={submitting}
           />
         </div>
         <div className="field">
@@ -71,6 +83,7 @@ export default function SignupPage() {
             value={form.email}
             onChange={(e) => upd('email', e.target.value)}
             required
+            disabled={submitting}
           />
         </div>
         <div className="field">
@@ -81,6 +94,7 @@ export default function SignupPage() {
             onChange={(e) => upd('phoneNumber', e.target.value)}
             required
             minLength={10}
+            disabled={submitting}
           />
         </div>
         <div className="field">
@@ -92,6 +106,7 @@ export default function SignupPage() {
             onChange={(e) => upd('password', e.target.value)}
             required
             minLength={8}
+            disabled={submitting}
           />
         </div>
         <div className="field">
@@ -100,13 +115,14 @@ export default function SignupPage() {
             id="co"
             value={form.companyName}
             onChange={(e) => upd('companyName', e.target.value)}
+            disabled={submitting}
           />
         </div>
-        {error ? <p className="error">{error}</p> : null}
-        <button type="submit" className="btn">
-          Create account
+        {error ? <InlineError>{error}</InlineError> : null}
+        <button type="submit" className="btn" disabled={submitting}>
+          {submitting ? 'Creating…' : 'Create account'}
         </button>
       </form>
-    </div>
+    </PageShell>
   );
 }

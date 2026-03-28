@@ -1,18 +1,23 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api';
 import { useAuth } from '@/components/AuthProvider';
 import type { Paginated, Ticket } from '@/types/ticket';
-import { ticketId } from '@/types/ticket';
+import { TicketListTable } from '@/components/tickets/TicketListTable';
+import { PageShell } from '@/components/ui/PageShell';
+import { PageHeader } from '@/components/ui/PageHeader';
+import { ErrorBanner } from '@/components/ui/ErrorBanner';
+import { LoadingState } from '@/components/ui/LoadingState';
 
 export default function ClientTicketsPage() {
   const { user, ready } = useAuth();
   const router = useRouter();
   const [data, setData] = useState<Paginated<Ticket> | null>(null);
   const [error, setError] = useState('');
+  const [retryKey, setRetryKey] = useState(0);
 
   useEffect(() => {
     if (!ready) {
@@ -22,57 +27,65 @@ export default function ClientTicketsPage() {
       router.replace('/login');
       return;
     }
-    apiFetch<Paginated<Ticket>>(
-      `/tickets/client/${user.sub}?page=1&limit=50`,
-    )
-      .then(setData)
-      .catch((e: Error) => setError(e.message));
-  }, [user, ready, router]);
+    let cancelled = false;
+    setError('');
+    apiFetch<Paginated<Ticket>>(`/tickets/client/${user.sub}?page=1&limit=50`)
+      .then((d) => {
+        if (!cancelled) {
+          setData(d);
+        }
+      })
+      .catch((e: Error) => {
+        if (!cancelled) {
+          setError(e.message);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, ready, router, retryKey]);
 
   if (!ready || !user) {
     return (
-      <div className="layout">
-        <p style={{ color: 'var(--muted)' }}>Loading…</p>
-      </div>
+      <PageShell>
+        <LoadingState />
+      </PageShell>
     );
   }
 
   return (
-    <div className="layout">
-      <h1>My tickets</h1>
-      <p style={{ color: 'var(--muted)' }}>
-        <Link href="/client/new">Create a ticket</Link>
-      </p>
-      {error ? <p className="error">{error}</p> : null}
-      {data && (
-        <div className="card" style={{ overflowX: 'auto' }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Title</th>
-                <th>Status</th>
-                <th>Priority</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.data.map((t) => (
-                <tr key={ticketId(t)}>
-                  <td>
-                    <Link href={`/client/ticket/${ticketId(t)}`}>
-                      {t.title}
-                    </Link>
-                  </td>
-                  <td>{t.status}</td>
-                  <td>{t.priority}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p style={{ color: 'var(--muted)', fontSize: '0.875rem' }}>
+    <PageShell>
+      <PageHeader
+        title="My tickets"
+        meta={
+          <Link href="/client/new" style={{ fontWeight: 600 }}>
+            Create a ticket
+          </Link>
+        }
+      />
+      {error ? (
+        <ErrorBanner message={error} onRetry={() => setRetryKey((k) => k + 1)} />
+      ) : null}
+      {data ? (
+        <>
+          <TicketListTable
+            tickets={data.data}
+            basePath="/client/ticket"
+            emptyTitle="No tickets yet"
+            emptyHint={
+              <>
+                When you create a ticket, it will show up here.{' '}
+                <Link href="/client/new">Create your first ticket</Link>.
+              </>
+            }
+          />
+          <p className="text-muted" style={{ marginTop: 'var(--space-3)' }}>
             {data.total} total
           </p>
-        </div>
-      )}
-    </div>
+        </>
+      ) : !error ? (
+        <LoadingState label="Loading tickets…" />
+      ) : null}
+    </PageShell>
   );
 }
